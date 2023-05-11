@@ -1,8 +1,10 @@
 import random
+import uuid
 from datetime import datetime, timedelta
 
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import FileExtensionValidator
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from shared.models import BaseModel
 from django.db import models
@@ -50,6 +52,45 @@ class CustomUser(AbstractUser, BaseModel):
             verify_type=verify_type,
         )
         return code
+
+    def check_username(self):
+        if not self.username:
+            temp_username = f"instagram - {uuid.uuid4().__str__().split('-')[-1]}"
+            while CustomUser.objects.filter(username=temp_username):
+                temp_username = f"{temp_username}{random.randint(0, 9)}"
+            self.username = temp_username
+
+    def check_email(self):
+        if self.email:
+            normalize_email = self.email.lower()
+            self.email = normalize_email
+
+    def check_passwd(self):
+        if not self.password:
+            temp_password = f"password - {uuid.uuid4().__str__().split('-')[-1]}"
+            self.password = temp_password
+
+    def hash_password(self):
+        if not self.password.startswith('pbkdf2_sha256'):
+            self.set_password(self.password)
+
+    def token(self):
+        refresh = RefreshToken.for_user(self)
+        return {
+            'access': str(refresh.access_token),
+            'refresh_token': str(refresh)
+        }
+
+    def clean(self):
+        self.check_username()
+        self.check_email()
+        self.check_passwd()
+        self.hash_password()
+
+    def save(self, *args, **kwargs):
+        if not self.pk:
+            self.clean()
+        super(CustomUser, self).save(*args, **kwargs)
 
 
 EXPIRE_PHONE = 2
